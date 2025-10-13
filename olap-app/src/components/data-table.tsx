@@ -10,19 +10,16 @@ import {
 } from "@tabler/icons-react"
 import {
   ColumnDef,
-  ColumnFiltersState,
   flexRender,
   getCoreRowModel,
-  getFacetedRowModel,
-  getFacetedUniqueValues,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
-  SortingState,
   useReactTable,
+  SortingState,
   VisibilityState,
+  ColumnFiltersState,
 } from "@tanstack/react-table"
-import { z } from "zod"
 
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -42,28 +39,19 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-export const schema = z.object({
-  id: z.number(),
-  header: z.string(),
-  type: z.string(),
-  status: z.string(),
-  target: z.string(),
-  limit: z.string(),
-  reviewer: z.string(),
-})
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type RowType = Record<string, any>
 
-type SchemaType = z.infer<typeof schema>
-
-const createColumns = (data: SchemaType[]): ColumnDef<SchemaType>[] => {
+const createColumns = (data: RowType[]): ColumnDef<RowType>[] => {
   if (data.length === 0) return []
-  
-  const keys = Object.keys(data[0]).filter(key => key !== 'id')
-  
+  const keys = Object.keys(data[0])
   return keys.map(key => ({
     accessorKey: key,
     header: key.charAt(0).toUpperCase() + key.slice(1),
     cell: ({ row }) => (
-      <div className="text-muted-foreground text-sm group-hover:text-black group-hover:opacity-100 transition-colors">{row.original[key as keyof SchemaType]}</div>
+      <div className="text-muted-foreground text-sm group-hover:text-black group-hover:opacity-100 transition-colors">
+        {String(row.original[key])}
+      </div>
     ),
     enableHiding: false,
     size: undefined,
@@ -71,16 +59,13 @@ const createColumns = (data: SchemaType[]): ColumnDef<SchemaType>[] => {
 }
 
 interface DataTableProps {
-  data: SchemaType[]
+  data: RowType[]
   isLoading?: boolean
 }
 
 export function DataTable({ data, isLoading = false }: DataTableProps) {
-  const [columnVisibility, setColumnVisibility] =
-    React.useState<VisibilityState>({})
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-    []
-  )
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
@@ -88,6 +73,12 @@ export function DataTable({ data, isLoading = false }: DataTableProps) {
   })
 
   const columns = React.useMemo(() => createColumns(data), [data])
+
+  // Use 'id' if present, otherwise fallback to row index
+  const getRowId = React.useCallback(
+    (row: RowType, index: number) => (row.id !== undefined ? String(row.id) : String(index)),
+    []
+  )
 
   const table = useReactTable({
     data,
@@ -98,7 +89,7 @@ export function DataTable({ data, isLoading = false }: DataTableProps) {
       columnFilters,
       pagination,
     },
-    getRowId: (row) => row.id.toString(),
+    getRowId,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
@@ -107,8 +98,6 @@ export function DataTable({ data, isLoading = false }: DataTableProps) {
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getFacetedRowModel: getFacetedRowModel(),
-    getFacetedUniqueValues: getFacetedUniqueValues(),
   })
 
   return (
@@ -119,18 +108,16 @@ export function DataTable({ data, isLoading = false }: DataTableProps) {
             <TableHeader className="bg-muted sticky top-0 z-10">
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => {
-                    return (
-                      <TableHead key={header.id} colSpan={header.colSpan} className="w-auto">
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                      </TableHead>
-                    )
-                  })}
+                  {headerGroup.headers.map((header) => (
+                    <TableHead key={header.id} colSpan={header.colSpan} className="w-auto">
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                    </TableHead>
+                  ))}
                 </TableRow>
               ))}
             </TableHeader>

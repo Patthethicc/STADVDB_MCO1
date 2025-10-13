@@ -3,7 +3,7 @@ import { ChartAreaInteractive } from "@/components/chart-regular-area-interactiv
 import ChartBarInteractive from "@/components/chart-bar-area-interactive"
 import { DataTable } from "@/components/data-table"
 import { SectionCards } from "@/components/section-cards"
-import data from "@/app/data.json"
+import data from "@/app/timewise-sales-data.json"
 import { useHeaderTitle } from "@/components/header-title-context"
 import { useEffect } from "react"
 

@@ -1,0 +1,30 @@
+[
+  {
+    "id": 1,
+    "date": "2024-10-01",
+    "region": "NCR",
+    "sales": 12000,
+    "transactions": 150
+  },
+  {
+    "id": 2,
+    "date": "2024-10-02",
+    "region": "CALABARZON",
+    "sales": 9800,
+    "transactions": 120
+  },
+  {
+    "id": 3,
+    "date": "2024-10-03",
+    "region": "Central Luzon",
+    "sales": 13400,
+    "transactions": 170
+  },
+  {
+    "id": 4,
+    "date": "2024-10-04",
+    "region": "NCR",
+    "sales": 11000,
+    "transactions": 140
+  }
+]
