@@ -61,10 +61,7 @@ export default function ChartInteractive({
 }: ChartInteractiveProps) {
   const router = useRouter()
 
-  // If no data is provided, render nothing (user requested no template/fallback)
-  if (!propData || propData.length === 0) return null
-
-  const sourceData = React.useMemo(() => propData!, [propData])
+  const sourceData = React.useMemo(() => propData ?? [], [propData])
 
   const inferredXKey = React.useMemo(() => {
     if (propXKey) return propXKey
@@ -124,6 +121,7 @@ export default function ChartInteractive({
   }, [sourceData, dayOlap, granularity, inferredXKey, inferredYKeys])
 
   const finalData = dayOlap ? aggregated : sourceData
+  if (!propData || propData.length === 0) return null
   const finalXKey = inferredXKey
 
   const formatX = (val: unknown) => {
