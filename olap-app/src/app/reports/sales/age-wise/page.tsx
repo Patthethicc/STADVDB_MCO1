@@ -15,18 +15,18 @@ export default function Page() {
   
   const [apiPath, setApiPath] = useState<string>(() => {
     try {
-      if (typeof window === "undefined") return '/api/product-by-gender'
+      if (typeof window === "undefined") return '/api/sales-by-age'
       const url = new URL(window.location.href)
       const q = url.searchParams.get('api')
-      return q || '/api/product-by-gender'
+      return q || '/api/sales-by-age'
     } catch (e) {
-      return '/api/product-by-gender'
+      return '/api/sales-by-age'
     }
   })
 
   const { setTitle } = useHeaderTitle();
   useEffect(() => {
-    setTitle("Reports: Product & Category Revenue by Gender");
+    setTitle("Reports: Age-wise Sales");
   }, [setTitle]);
 
   useEffect(() => {
@@ -54,8 +54,8 @@ export default function Page() {
 
   
   const routeButtons = [
-    { label: "Product", api: "/api/product-by-gender" },
-    { label: "Category", api: "/api/product-category-by-gender" },
+    { label: "Age", api: "/api/sales-by-age" },
+    { label: "Age Group", api: "/api/sales-by-age-group" },
   ]
 
   return (
@@ -67,8 +67,8 @@ export default function Page() {
             <ChartInteractive
               data={data || []}
               chart="bar"
-              title="Gender-wise Product & Category Revenue"
-              description="Product & category revenue on gender"
+              title="Age-wise Sales"
+              description="Age used as metric for sales"
               dayOlap={false}
               routeButtons={routeButtons}
             />

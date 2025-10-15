@@ -15,18 +15,18 @@ export default function Page() {
   
   const [apiPath, setApiPath] = useState<string>(() => {
     try {
-      if (typeof window === "undefined") return '/api/product-by-gender'
+      if (typeof window === "undefined") return '/api/sales-by-rank-descending'
       const url = new URL(window.location.href)
       const q = url.searchParams.get('api')
-      return q || '/api/product-by-gender'
+      return q || '/api/sales-by-rank-descending'
     } catch (e) {
-      return '/api/product-by-gender'
+      return '/api/sales-by-rank-descending'
     }
   })
 
   const { setTitle } = useHeaderTitle();
   useEffect(() => {
-    setTitle("Reports: Product & Category Revenue by Gender");
+    setTitle("Reports: Ranked Revenue Per Product");
   }, [setTitle]);
 
   useEffect(() => {
@@ -54,8 +54,8 @@ export default function Page() {
 
   
   const routeButtons = [
-    { label: "Product", api: "/api/product-by-gender" },
-    { label: "Category", api: "/api/product-category-by-gender" },
+    { label: "Ascending", api: "/api/sales-by-rank-ascending" },
+    { label: "Descending", api: "/api/sales-by-rank-descending" },
   ]
 
   return (
@@ -66,9 +66,9 @@ export default function Page() {
           <div className="px-4 lg:px-6">
             <ChartInteractive
               data={data || []}
-              chart="bar"
-              title="Gender-wise Product & Category Revenue"
-              description="Product & category revenue on gender"
+              chart="area"
+              title="Ranked Product Sales Revenue"
+              description="Ranked revenue for products"
               dayOlap={false}
               routeButtons={routeButtons}
             />

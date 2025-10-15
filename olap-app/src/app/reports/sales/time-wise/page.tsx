@@ -1,31 +1,89 @@
+ 
 "use client"
 import ChartInteractive from "@/components/chart-interactive"
 import { DataTable } from "@/components/data-table"
-import { SectionCards } from "@/components/section-cards"
-import data from "@/app/timewise-sales-data.json"
+ 
 import { useHeaderTitle } from "@/components/header-title-context"
-import { useEffect } from "react"
+
+import { useEffect, useState } from "react"
 
 export default function Page() {
+  const [data, setData] = useState<any[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  
+  const [apiPath, setApiPath] = useState<string>(() => {
+    try {
+      if (typeof window === "undefined") return '/api/sales-total-time'
+      const url = new URL(window.location.href)
+      const q = url.searchParams.get('api')
+      return q || '/api/sales-total-time'
+    } catch (e) {
+      return '/api/sales-total-time'
+    }
+  })
+
   const { setTitle } = useHeaderTitle();
   useEffect(() => {
     setTitle("Reports: Time-wise Sales");
   }, [setTitle]);
+
+  useEffect(() => {
+    setLoading(true)
+    setError(null)
+    fetch(apiPath)
+      .then(async (res) => {
+        if (!res.ok) {
+          
+          let errText = await res.text()
+          try {
+            const parsed = JSON.parse(errText)
+            errText = parsed.error || errText
+          } catch (_) {
+            
+          }
+          throw new Error(errText || "Failed to fetch")
+        }
+        return res.json()
+      })
+      .then((res) => setData(res))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [apiPath]);
+
+  
+  const routeButtons = [
+    { label: "Days", api: "/api/sales-by-time-days" },
+    { label: "Months", api: "/api/sales-by-time-months" },
+    { label: "Years", api: "/api/sales-by-time-yearss" },
+    { label: "Total Time", api: "/api/sales-total-time" },
+  ]
+
   return (
     <div className="flex flex-1 flex-col">
       <div className="@container/main flex flex-1 flex-col gap-2">
         <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-          <SectionCards />
+          
           <div className="px-4 lg:px-6">
             <ChartInteractive
-              chart="area" // "line" | "bar" | "area"
-              title="Sales History"
-              description="Total sales over time"
-              />
+              data={data || []}
+              chart="area"
+              title="Timeline of Sales"
+              description="Plot of sales over time"
+              dayOlap={false}
+              routeButtons={routeButtons}
+            />
           </div>
-          <DataTable data={data} />
+          {loading ? (
+            <div className="px-4">Loading...</div>
+          ) : error ? (
+            <div className="px-4 text-red-500">Error: {error}</div>
+          ) : (
+            <DataTable data={data || []} />
+          )}
         </div>
       </div>
     </div>
-  )
+  );
 }

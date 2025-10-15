@@ -52,10 +52,6 @@ const data = {
       isActive: true,
       items: [
         {
-          title: "Highest ranking", // barchart, tabular
-          url: "/reports/sales/rank-based",
-        },
-        {
           title: "Location-wise", // barchart, tabular
           url: "/reports/sales/location-wise",
         },
@@ -67,6 +63,10 @@ const data = {
           title: "Gender-wise",
           url: "/reports/sales/gender-wise",
         },
+        {
+          title: "Age-wise",
+          url: "/reports/sales/age-wise",
+        },
       ],
     },
     {
@@ -75,6 +75,10 @@ const data = {
       icon: AudioWaveform,
       isActive: true,
       items: [
+        {
+          title: "Rank-wise", // barchart, tabular
+          url: "/reports/products/rank-based",
+        },
         {
           title: "Category-wise",
           url: "/reports/products/category-wise",
@@ -89,38 +93,31 @@ const data = {
         },
       ],
     },
-    {
-      title: "Delivery",
-      url: "#",
-      icon: AudioWaveform,
-      isActive: true,
-      items: [
-        {
-          title: "Location-based",
-          url: "/reports/delivery/location-wise",
-        },
-      ],
-    },
   ],
   projects: [
     {
       name: "Products",
-      url: "#",
+      url: "/reports/table/products",
       icon: PackageSearch,
     },
     {
       name: "Users",
-      url: "#",
+      url: "/reports/table/users",
       icon: User,
     },
     {
       name: "Date",
-      url: "#",
+      url: "/reports/table/date",
       icon: Calendar,
     },
     {
       name: "Location",
-      url: "#",
+      url: "/reports/table/location",
+      icon: MapPin,
+    },
+    {
+      name: "FactSales",
+      url: "/reports/table/factsales",
       icon: MapPin,
     },
   ],

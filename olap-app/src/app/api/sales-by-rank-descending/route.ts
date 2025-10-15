@@ -7,7 +7,7 @@ export async function GET() {
   if (!API_URL || !API_KEY) {
     return NextResponse.json({ error: "Missing NEXT_API_URL or API_KEY" }, { status: 500 });
   }
-  const endpoint = `${API_URL}/rest/v1/rpc/get_sales_by_country`;
+  const endpoint = `${API_URL}/rest/v1/rpc/get_ranked_sales_descending`;
   try {
     const res = await fetch(endpoint, {
       method: "POST",

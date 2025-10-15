@@ -1,8 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 "use client"
 import ChartInteractive from "@/components/chart-interactive"
 import { DataTable } from "@/components/data-table"
-import { SectionCards } from "@/components/section-cards"
+ 
 import { useHeaderTitle } from "@/components/header-title-context"
 
 import { useEffect, useState } from "react"
@@ -11,6 +11,18 @@ export default function Page() {
   const [data, setData] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  
+  const [apiPath, setApiPath] = useState<string>(() => {
+    try {
+      if (typeof window === "undefined") return '/api/sales-by-country'
+      const url = new URL(window.location.href)
+      const q = url.searchParams.get('api')
+      return q || '/api/sales-by-country'
+    } catch (e) {
+      return '/api/sales-by-country'
+    }
+  })
 
   const { setTitle } = useHeaderTitle();
   useEffect(() => {
@@ -18,33 +30,48 @@ export default function Page() {
   }, [setTitle]);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-    fetch("/api/sales-by-country")
+    setLoading(true)
+    setError(null)
+    fetch(apiPath)
       .then(async (res) => {
         if (!res.ok) {
-          const error = await res.json();
-          throw new Error(error.error || "Failed to fetch");
+          
+          let errText = await res.text()
+          try {
+            const parsed = JSON.parse(errText)
+            errText = parsed.error || errText
+          } catch (_) {
+            
+          }
+          throw new Error(errText || "Failed to fetch")
         }
-        return res.json();
+        return res.json()
       })
       .then((res) => setData(res))
       .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
+      .finally(() => setLoading(false))
+  }, [apiPath]);
+
+  
+  const routeButtons = [
+    { label: "City", api: "/api/sales-by-city" },
+    { label: "Country", api: "/api/sales-by-country" },
+  ]
 
   return (
     <div className="flex flex-1 flex-col">
       <div className="@container/main flex flex-1 flex-col gap-2">
         <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-          <SectionCards />
+          
           <div className="px-4 lg:px-6">
-            <ChartInteractive data={
-              data || []}
-              chart="area" // "line" | "bar" | "area"
-              title="Sales by Country"
-              description="Total revenue for each country"
-              />
+            <ChartInteractive
+              data={data || []}
+              chart="bar"
+              title="Location-wise Sales"
+              description="Sales per country and city"
+              dayOlap={false}
+              routeButtons={routeButtons}
+            />
           </div>
           {loading ? (
             <div className="px-4">Loading...</div>
