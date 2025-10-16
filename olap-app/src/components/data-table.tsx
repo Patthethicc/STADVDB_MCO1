@@ -1,5 +1,4 @@
 "use client"
-
 import * as React from "react"
 import {
   IconChevronLeft,
@@ -74,7 +73,6 @@ export function DataTable({ data, isLoading = false }: DataTableProps) {
 
   const columns = React.useMemo(() => createColumns(data), [data])
 
-  // Use 'id' if present, otherwise fallback to row index
   const getRowId = React.useCallback(
     (row: RowType, index: number) => (row.id !== undefined ? String(row.id) : String(index)),
     []

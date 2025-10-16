@@ -24,8 +24,6 @@ import {
   ToggleGroupItem,
 } from "@/components/ui/toggle-group"
 
-// Clean, focused ChartInteractive implementation.
-
 const chartConfig = {
   visitors: { label: "Visitors" },
   desktop: { label: "Desktop", color: "hsl(var(--chart-1))" },
@@ -41,9 +39,7 @@ export interface ChartInteractiveProps {
   description?: string
   stacked?: boolean
   dayOlap?: boolean
-  // routeButtons may now provide either an href (navigate) or an api path
   routeButtons?: { label: string; href?: string; api?: string }[]
-  // optional callback invoked when a button with an `api` is clicked
   onRouteClick?: (apiPath: string) => void
 }
 
@@ -165,23 +161,18 @@ export default function ChartInteractive({
                     size="sm"
                     variant="ghost"
                     onClick={() => {
-                      // Prefer api callback when provided (page-level handler)
                       if (b.api && onRouteClick) return onRouteClick(b.api)
-                      // If no callback provided but an api path exists, fall back to a full-page reload
                       if (b.api && !onRouteClick) {
                         try {
                           const url = new URL(window.location.href)
                           url.searchParams.set("api", b.api)
-                          // navigate to the same page with ?api=... (full reload)
                           window.location.href = url.toString()
                           return
                         } catch (e) {
-                          // fallback: just set location
                           window.location.href = `?api=${encodeURIComponent(b.api)}`
                           return
                         }
                       }
-                      // Fallback to navigation when href provided
                       if (b.href) return router.push(b.href)
                     }}
                   >

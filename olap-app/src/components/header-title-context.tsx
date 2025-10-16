@@ -10,7 +10,6 @@ const HeaderTitleContext = createContext<HeaderTitleContextType | undefined>(und
 
 export function HeaderTitleProvider({ children, defaultTitle = "" }: { children: React.ReactNode, defaultTitle?: string }) {
   const [title, setTitle] = useState(defaultTitle)
-  // Memoize setTitle to avoid unnecessary rerenders
   const setHeaderTitle = useCallback((t: string) => setTitle(t), [])
   return (
     <HeaderTitleContext.Provider value={{ title, setTitle: setHeaderTitle }}>

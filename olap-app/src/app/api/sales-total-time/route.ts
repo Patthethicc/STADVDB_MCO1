@@ -16,7 +16,6 @@ export async function GET() {
         Authorization: `Bearer ${API_KEY}`,
         apikey: API_KEY,
       },
-      // body: JSON.stringify({}) // Add body if needed by your RPC
     });
     if (!res.ok) {
       const error = await res.text();

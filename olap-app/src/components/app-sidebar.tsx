@@ -30,13 +30,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 
-// This is sample data.
 const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
-  },
   teams: [
     {
       name: "Faker DB",
@@ -52,11 +46,11 @@ const data = {
       isActive: true,
       items: [
         {
-          title: "Location-wise", // barchart, tabular
+          title: "Location-wise",
           url: "/reports/sales/location-wise",
         },
         {
-          title: "Time-wise", // 
+          title: "Time-wise",
           url: "/reports/sales/time-wise",
         },
         {
@@ -76,7 +70,7 @@ const data = {
       isActive: true,
       items: [
         {
-          title: "Rank-wise", // barchart, tabular
+          title: "Rank-wise",
           url: "/reports/products/rank-based",
         },
         {

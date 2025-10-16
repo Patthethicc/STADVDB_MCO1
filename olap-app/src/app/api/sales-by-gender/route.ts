@@ -16,10 +16,8 @@ export async function GET() {
         Authorization: `Bearer ${API_KEY}`,
         apikey: API_KEY,
       },
-      // body: JSON.stringify({}) // Add body if needed by your RPC
     });
 
-    // Read raw text first so we can return helpful diagnostics if it's not JSON
     const raw = await res.text();
     const contentType = res.headers.get("content-type") || "";
 
@@ -35,13 +33,12 @@ export async function GET() {
         {
           error: "Unexpected non-JSON response from upstream",
           contentType,
-          body: raw.slice(0, 2000) // limit returned size
+          body: raw.slice(0, 2000)
         },
         { status: 502 }
       );
     }
 
-    // Safely parse JSON and return helpful diagnostics if parsing fails
     try {
       const data = JSON.parse(raw);
       return NextResponse.json(data);
