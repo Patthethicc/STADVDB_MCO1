@@ -56,7 +56,7 @@ export default function Page() {
   const routeButtons = [
     { label: "Days", api: "/api/sales-by-time-days" },
     { label: "Months", api: "/api/sales-by-time-months" },
-    { label: "Years", api: "/api/sales-by-time-yearss" },
+    { label: "Years", api: "/api/sales-by-time-years" },
     { label: "Total Time", api: "/api/sales-total-time" },
   ]
 
