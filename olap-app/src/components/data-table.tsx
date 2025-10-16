@@ -38,8 +38,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type RowType = Record<string, any>
+type RowType = Record<string, unknown>
 
 const createColumns = (data: RowType[]): ColumnDef<RowType>[] => {
   if (data.length === 0) return []

@@ -8,18 +8,19 @@ import { useHeaderTitle } from "@/components/header-title-context"
 import { useEffect, useState } from "react"
 
 export default function Page() {
-  const [data, setData] = useState<any[] | null>(null);
+  const [data, setData] = useState<Record<string, unknown>[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
   
-  const [apiPath, setApiPath] = useState<string>(() => {
+  const [apiPath] = useState<string>(() => {
     try {
       if (typeof window === "undefined") return '/api/sales-by-rank-descending'
       const url = new URL(window.location.href)
       const q = url.searchParams.get('api')
       return q || '/api/sales-by-rank-descending'
     } catch (e) {
+      console.log(e);
       return '/api/sales-by-rank-descending'
     }
   })
@@ -41,7 +42,7 @@ export default function Page() {
             const parsed = JSON.parse(errText)
             errText = parsed.error || errText
           } catch (_) {
-            
+            console.log(_);
           }
           throw new Error(errText || "Failed to fetch")
         }

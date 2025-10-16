@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -42,18 +41,20 @@ export async function GET() {
     try {
       const data = JSON.parse(raw);
       return NextResponse.json(data);
-    } catch (parseErr: any) {
+    } catch (parseErr: unknown) {
+      const perr = parseErr instanceof Error ? parseErr.message : String(parseErr)
       return NextResponse.json(
         {
           error: "Failed to parse JSON from upstream",
-          parseError: parseErr?.message ?? String(parseErr),
+          parseError: perr,
           contentType,
           bodyPreview: raw.slice(0, 2000)
         },
         { status: 502 }
       );
     }
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? String(err) }, { status: 500 });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

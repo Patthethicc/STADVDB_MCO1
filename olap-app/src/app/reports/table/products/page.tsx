@@ -7,7 +7,7 @@ import { useHeaderTitle } from "@/components/header-title-context"
 import { useEffect, useState } from "react"
 
 export default function Page() {
-  const [data, setData] = useState<any[] | null>(null);
+  const [data, setData] = useState<Record<string, unknown>[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
