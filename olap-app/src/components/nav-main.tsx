@@ -20,6 +20,7 @@ import {
 
 export function NavMain({
   items,
+  label = "Reports",
 }: {
   items: {
     title: string
@@ -31,14 +32,15 @@ export function NavMain({
       url: string
     }[]
   }[]
+  label?: string
 }) {
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Reports</SidebarGroupLabel>
+      <SidebarGroupLabel>{label}</SidebarGroupLabel>
       <SidebarMenu>
-        {items.map((item) => (
+        {items.map((item, index) => (
           <Collapsible
-            key={item.title}
+            key={`${item.title ?? item.url ?? index}-${index}`}
             asChild
             defaultOpen={item.isActive}
             className="group/collapsible"
@@ -53,8 +55,10 @@ export function NavMain({
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <SidebarMenuSub>
-                  {item.items?.map((subItem) => (
-                    <SidebarMenuSubItem key={subItem.title}>
+                  {item.items?.map((subItem, subIndex) => (
+                    <SidebarMenuSubItem
+                      key={`${item.title}-${subItem.title ?? subItem.url ?? subIndex}-${subIndex}`}
+                    >
                       <SidebarMenuSubButton asChild>
                         <a href={subItem.url}>
                           <span>{subItem.title}</span>

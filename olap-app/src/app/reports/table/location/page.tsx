@@ -1,7 +1,7 @@
  
 "use client"
-import ChartInteractive from "@/components/chart-interactive"
 import { DataTable } from "@/components/data-table"
+import Loading from "@/components/loading"
 import { useHeaderTitle } from "@/components/header-title-context"
 
 import { useEffect, useState } from "react"
@@ -37,7 +37,7 @@ export default function Page() {
       <div className="@container/main flex flex-1 flex-col gap-2">
         <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
           {loading ? (
-            <div className="px-4">Loading...</div>
+            <Loading />
           ) : error ? (
             <div className="px-4 text-red-500">Error: {error}</div>
           ) : (

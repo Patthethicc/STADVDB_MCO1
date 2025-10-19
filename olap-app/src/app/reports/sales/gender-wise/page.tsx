@@ -1,6 +1,7 @@
  
 "use client"
 import ChartInteractive from "@/components/chart-interactive"
+import Loading from "@/components/loading"
 import { DataTable } from "@/components/data-table"
  
 import { useHeaderTitle } from "@/components/header-title-context"
@@ -76,7 +77,7 @@ export default function Page() {
             />
           </div>
           {loading ? (
-            <div className="px-4">Loading...</div>
+            <Loading />
           ) : error ? (
             <div className="px-4 text-red-500">Error: {error}</div>
           ) : (
