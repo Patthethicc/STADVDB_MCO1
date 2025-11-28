@@ -59,16 +59,8 @@ const data = {
           url: "/crud/create-user",
         },
         {
-          title: "Read a User",
-          url: "/crud/read-user",
-        },
-        {
-          title: "Update a User",
-          url: "/crud/update-user",
-        },
-        {
-          title: "Delete a User",
-          url: "/crud/delete-user",
+          title: "View/Edit a User",
+          url: "/crud/edit-user",
         },
       ],
     },

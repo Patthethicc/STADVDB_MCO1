@@ -59,9 +59,10 @@ const createColumns = (data: RowType[]): ColumnDef<RowType>[] => {
 interface DataTableProps {
   data: RowType[]
   isLoading?: boolean
+  onRowClick?: (row: RowType) => void
 }
 
-export function DataTable({ data, isLoading = false }: DataTableProps) {
+export function DataTable({ data, isLoading = false, onRowClick }: DataTableProps) {
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [sorting, setSorting] = React.useState<SortingState>([])
@@ -135,7 +136,11 @@ export function DataTable({ data, isLoading = false }: DataTableProps) {
                 table.getRowModel().rows.map((row) => (
                   <TableRow
                     key={row.id}
-                    className="animate-in fade-in duration-300 group hover:bg-accent"
+                    onClick={() => onRowClick?.(row.original)}
+                    className={
+                      (onRowClick ? "cursor-pointer " : "") +
+                      "animate-in fade-in duration-300 group hover:bg-accent"
+                    }
                   >
                     {row.getVisibleCells().map((cell) => (
                       <TableCell key={cell.id} className="w-auto">
