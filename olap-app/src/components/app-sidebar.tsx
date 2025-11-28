@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { AudioWaveform, Calendar, GalleryVerticalEnd, MapPin, PackageSearch, User } from "lucide-react"
+import { AudioWaveform, Calendar, GalleryVerticalEnd, MapPin, PackageSearch, User, DatabaseZap } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
 import { NavProjects } from "@/components/nav-projects"
@@ -47,6 +47,32 @@ const data = {
       ],
     },
   ],
+  crud: [
+    {
+      title: "CRUD Operations",
+      url: "#",
+      icon: DatabaseZap,
+      isActive: true,
+      items: [
+        {
+          title: "Create a User",
+          url: "/crud/create-user",
+        },
+        {
+          title: "Read a User",
+          url: "/crud/read-user",
+        },
+        {
+          title: "Update a User",
+          url: "/crud/update-user",
+        },
+        {
+          title: "Delete a User",
+          url: "/crud/delete-user",
+        },
+      ],
+    },
+  ],
   projects: [
     {
       name: "Products",
@@ -83,6 +109,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <TeamSwitcher teams={data.teams} />
       </SidebarHeader>
       <SidebarContent>
+  <NavMain items={data.crud} />
   <NavMain items={data.olap} />
   {/* <NavMain items={data.navMain} /> */}
         <NavProjects projects={data.projects} />
