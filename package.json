@@ -1,5 +1,24 @@
 {
+  "name": "stadvdb-mono",
+  "private": true,
+  "scripts": {
+    "dev:backend:1": "cross-env PORT=3001 npm --prefix backend start",
+    "dev:backend:2": "cross-env PORT=3002 npm --prefix backend start",
+    "dev:backend:3": "cross-env PORT=3003 npm --prefix backend start",
+
+    "dev:frontend:1": "cross-env PORT=3000 BACKEND_URL=http://localhost:3001 npm --prefix olap-app run dev",
+    "dev:frontend:2": "cross-env PORT=3004 BACKEND_URL=http://localhost:3002 npm --prefix olap-app run dev",
+    "dev:frontend:3": "cross-env PORT=3005 BACKEND_URL=http://localhost:3003 npm --prefix olap-app run dev",
+
+    "dev:backends": "concurrently \"npm run dev:backend:1\" \"npm run dev:backend:2\" \"npm run dev:backend:3\"",
+    "dev:frontends": "concurrently \"npm run dev:frontend:1\" \"npm run dev:frontend:2\" \"npm run dev:frontend:3\"",
+    "dev:all": "concurrently \"npm run dev:backend:1\" \"npm run dev:backend:2\" \"npm run dev:backend:3\" \"npm run dev:frontend:1\" \"npm run dev:frontend:2\" \"npm run dev:frontend:3\""
+  },
   "dependencies": {
     "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0",
+    "cross-env": "^7.0.3"
   }
 }

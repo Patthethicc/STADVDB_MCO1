@@ -5,6 +5,8 @@ import { useHeaderTitle } from "@/components/header-title-context"
 
 import { useEffect, useMemo, useState } from "react"
 import { Field } from "@/components/ui/field"
+import { Button } from "@/components/ui/button"
+import { RefreshCw } from "lucide-react"
 import UserModal from "@/components/user-modal"
 import EditUserForm from "@/components/edit-user-form"
 
@@ -13,6 +15,7 @@ export default function Page() {
   const [data, setData] = useState<Record<string, unknown>[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
@@ -24,20 +27,40 @@ export default function Page() {
   }, [setTitle]);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-    fetch("/api/users")
-      .then(async (res) => {
-        if (!res.ok) {
-          const error = await res.json();
-          throw new Error(error.error || "Failed to fetch");
-        }
-        return res.json();
-      })
-      .then((res) => setData(res))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+    // initial load — not background so table can show a loading state
+    fetchUsers({ background: false });
   }, []);
+
+  // fetch function used by initial load and refresh button
+  async function fetchUsers({ background = true } = {}) {
+    // background=true means do not clear existing table; only show spinner on button
+    if (background) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+      setError(null);
+      setData(null);
+    }
+
+    try {
+      const res = await fetch("/api/users");
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to fetch");
+      }
+      const json = await res.json();
+      // replace table only once fully loaded
+      setData(json);
+      setError(null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // for background refresh, keep existing data and surface a non-blocking error
+      setError(msg);
+    } finally {
+      if (background) setRefreshing(false);
+      else setLoading(false);
+    }
+  }
 
   // client-side filtering logic
   const filtered = useMemo(() => {
@@ -103,20 +126,43 @@ export default function Page() {
       <div className="@container/main flex flex-1 flex-col gap-2">
         <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
           <div className="px-4">
-            <input
-              className="w-full rounded border px-3 py-2"
-              placeholder="Search all columns (gender requires quotes e.g. 'M')"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
+            <div className="flex items-center gap-2">
+              <input
+                className="flex-1 rounded border px-3 py-2"
+                placeholder="Search all columns (gender requires quotes e.g. 'M')"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="h-8 w-8 p-0 flex items-center justify-center"
+                onClick={() => fetchUsers({ background: true })}
+                aria-label="Refresh users"
+                title="Refresh"
+                disabled={refreshing}
+              >
+                {refreshing ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
           </div>
 
           {loading ? (
             <Loading />
-          ) : error ? (
-            <div className="px-4 text-red-500">Error: {error}</div>
           ) : (
             <>
+              {/* If there's an error and no prior data, show full error. If there's data, show a non-blocking warning. */}
+              {!data && error && (
+                <div className="px-4 text-red-500">Error: {error}</div>
+              )}
+              {data && error && (
+                <div className="px-4 text-yellow-600 text-sm">Warning: {error}</div>
+              )}
+
               <DataTable data={filtered} onRowClick={handleRowClick} />
               {selected && (
                 <UserModal
