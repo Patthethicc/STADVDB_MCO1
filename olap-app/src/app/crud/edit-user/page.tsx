@@ -26,7 +26,7 @@ export default function Page() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetch("/api/table-users")
+    fetch("/api/users")
       .then(async (res) => {
         if (!res.ok) {
           const error = await res.json();
@@ -76,17 +76,19 @@ export default function Page() {
   }
   async function handleDelete(id: string | number | undefined) {
     if (!id) return;
-    // adapt endpoint to your API
     const ok = confirm("Delete this user?");
     if (!ok) return;
     try {
-      const res = await fetch(`/api/table-users/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Delete failed");
+      const res = await fetch(`/api/users/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Delete failed");
+      }
       // remove locally
       setData((d) => d?.filter((r) => r.id !== id) ?? null);
       setSelected(null);
     } catch (e) {
-      alert("Delete failed");
+      alert(e instanceof Error ? e.message : "Delete failed");
     }
   }
   function onEditSaved(updated: Record<string, unknown>) {

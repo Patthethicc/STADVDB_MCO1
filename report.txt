@@ -1,0 +1,641 @@
+Query Processing Technical Report
+
+Transaction Management Technical Report
+
+Wesner Almin III1, Ethan Iago Dela Cruz2, Rohann Gabriel Dizon3, and Patrick Hans Perez4
+De La Salle University
+1wesner_almin@dlsu.edu.ph, 2ethan_iago_delacruz@dlsu.edu.ph, 3rohann_dizon@dlsu.edu.ph, 4patrick_hans_perez@dlsu.edu.ph
+
+
+
+
+
+
+ABSTRACT
+This paper covers the technical report for the Online Transaction Processing (OLTP) application built for testing concurrency control and global crash recovery of databases. It highlights the design, implementation, and analysis of a three-node homogenous distributed database system utilizing a Master-Slave architecture. In addition to that, the databases were partitioned horizontally, sharding by birth year of the Users table. A custom middleware layer was developed to ensure location and fragmentation transparency, routing transactions dynamically while enforcing concurrency control and data consistency.
+
+The study evaluates the system's performance under four distinct isolation levels (Read Uncommitted, Read Committed, Repeatable Read, and Serializable) and analyzes the efficacy of recovery strategies during global failures. Performance stress testing indicates that Read Committed, when paired with explicit pessimistic locking, offers the optimal balance between transaction throughput and data integrity. Furthermore, the implementation demonstrates robust fault tolerance through automated slave promotion, heartbeat monitoring, and immediate database modification semantics, ensuring the preservation of ACID properties during node crashes and network partitions.
+
+Keywords
+Virtual Machine, Recovery Strategy, Concurrency, Isolation, Isolation Levels, Immediate Database Modification, Master-Slave, Distributed Database, Homogenous Database, OLTP, Online Transaction Processing
+
+Introduction
+
+Distributed database systems have become a crucial and essential part of modern systems where scalability and high availability are prioritised. While a centralized database would store all of their data in one location, distributed databases store and manage their data in multiple locations or nodes allowing for better tolerance for shutdowns since one node failing doesn’t instantly cause the system to fail.  
+
+In this project, a distributed database was designed and implemented across three nodes, each responsible for storing specific subsets or replicas of the Users table. Node 1 serves as the central node containing the full dataset, while Node 2 and Node 3 hold vertical fragments categorized by year of birth (2006 and 2007), along with a full replica node for redundancy. This design simulates real-world distributed systems where data is partitioned for efficiency and replicated for reliability. A custom web application backend manages all interactions across these distributed nodes. It determines the correct node to query based on user attributes, forwards write operations to appropriate fragments, and ensures consistency through a combination of replication logic and failure-recovery mechanisms. The backend also exposes REST API endpoints used by a Java-based test script to simulate concurrent user operations and global failures. This project also aims to analyze how the distributed database system acts under different isolation levels and how it responds to global failures.
+
+Distributed Database Design
+
+The system developed encompasses a 3-node homogenous distributed database, utilizing master-slave database system architecture. Encompassing one central node and two horizontally fragmented nodes, the system supports concurrent transactions, isolation-level specificity, replication, and recovery. For the scope of this project, only the “Users” table was utilized, following a homogenous schema across all three nodes. Horizontal fragmentation was done by the user’s dateOfBirth year, with SLAVE 06 and SLAVE 07 getting rows with 2006 and 2007 respectively.
+
+Figure 1.0 Diagram of Distributed Database Structure
+
+The ‘MASTER’ central node inherits a full copy of the Users table, being the main entry point and receiver of all transaction-related INSERT / UPDATE / DELETE database operations. The two read-replica horizontal fragment nodes, “SLAVE 06” and “SLAVE 07” each contain fragments of the original “Users” table, each inheriting rows with the dateOfBirth years 2006 and 2007 respectively. In implementation, the permissions for each node are enforced through ‘getReadPool’ and ‘getWritePool’, giving the MASTER node authoritative read-write-access to the database and the fellow fragment nodes, while SLAVE 06 and SLAVE 07 have read-only access.  Fragmentation is enforced by only allowing years of 2006 and 2007 for their respective nodes, while replication happens primarily within the MASTER node. For replication, the MASTER node enforces a synchronous WRITE on the fragment nodes per transaction, updating the fragment nodes through the central node’s write authority. 
+
+CRUD is done via REST API: INSERT for rows with validated DOB into MASTER, UPDATE with isolation levels via SET SESSION TRANSACTION ISOLATION LEVEL, DELETE via user id, and READ via read-all, id, and year. Concurrency is also implemented with beginTransaction(), commit(), and rollback(). The update mechanisms use explicit DB operations on the master connection, having getConnection(), begin(), execute(), and commit(). The function updateUserById() sets the isolation level before beginning the transaction. 
+
+Failure and recovery handling is done through automated slave promotion, periodic health checks, and transactional rollback/commit semantics to preserve correctness during and after failures. 
+
+
+
+Figure 1.1 Diagram of promoteSlave() cycle
+
+Initially, connect.js polls nodes every 10 seconds to detect the availability of the central node. Once the master is detected to be down, the changeMasterNode() functionality runs, selecting any available slave node as replacement, and promotes it through promoteSlave(). promoteSlave() contains SQL commands to convert the slave into a MASTER with STOP SLAVE, SET PERSIST, among others. The remaining node has its master reassigned via CHANGE MASTER TO so that they replicate from the newly appointed MASTER. Once the old master node is detected to be back online, recoverOldMaster() is called, reconverting all other nodes back into slaves and resyncing them to the old master node.
+
+The system uses writes for master transactions (beginTransaction → execute → commit). However, if a connection crashes during a write, the catch block rolls back the master transaction to avoid any partial states, allowing the operation to be retried or continued so that the DB retains a consistent state. If a promotion occurs while writes are mid-operation, the promoted slave continues accepting writes, while the system relies on transaction rollback semantics to avoid inconsistencies. 
+
+Concurrency Control and Consistency
+
+In the developed web application, the central locking strategy operates in the master-slave mode. Focusing all writing (Creating, Updating, and Deleting) in the Master Node (Node 2) streamlines the system and avoids the intricacies of dispersed deadlocks seen in multi-master scenarios. Within the application, _updateUserById_, and deleteUserById_ functions, pessimistic locking is employed in the SQL query as SELECT … FOR UPDATE. When concurrent transactions attempt to access the same record, ($T_1$) in one transaction, the system ensures that it exclusively locks the record to prevent any other access or modification. While the other concurrent transaction ($T_2$) is made to wait until $T_1$ makes a commit or a roll back to ensure the database properties (ACID) are kept. 
+
+Update Strategy & Architecture
+
+The architecture uses a Master-Slave with Horizontal Fragmentation. The code specifically designs the nodes with roles where Node 2 is the MASTER, and Node 1 (SLAVE 2006) and Node 3 (SLAVE 2007) are read-only replicas/fragments. This structure enhances the system’s efficiency in handling read-dominant workloads (which is the average case for web applications), with SELECT queries sent to slave nodes and a central consistency controller for all INSERT/UPDATE operations at the Master.
+
+Database Consistency Mechanism 
+
+The update strategy employed is Primary Copy with Asynchronous Replication:
+Write Path: The application middleware (users.services.js) routes all state-changing operations to the getWritePool() (Master Node).
+Read Path: Queries are routed to getReadPool() (Slave Nodes), which contain horizontally fragmented data based on the dateOfBirth year (2006 vs. 2007).
+Consistency Logic: The code initially attempted a "Dual Write" strategy (writing to Master and Fragment synchronously), but these lines are commented out in the final implementation. Therefore, the active strategy relies on the Master Node to serve as the "Source of Truth." Consistency is guaranteed at the Master immediately upon commit.
+
+Update Algorithm
+Start the transaction on the master node
+ Only the master is allowed to perform writes.
+Get an exclusive lock on x
+Use: SELECT x FOR UPDATE
+If another transaction is using x, wait or abort.
+Read x and check if the update is valid
+Example: check constraints, year ranges, uniqueness, etc.
+If validation fails → rollback the transaction.
+Apply the update
+Set x = v (the new value) on the master node.
+Commit the transaction on the master node.
+Replicate the change to other nodes
+This is done automatically and asynchronously by the system.
+Slave/replica nodes eventually receive the new value.
+Isolation Level
+Taking into consideration the structure of the code as well as the updateUserById function, the best isolation level for this application should be READ COMMITTED with the use of explicit row locking (FOR UPDATE). Although SERIALIZABLE gives the best protection, the negative impact on throughput is concerning. The code sample enforces serialization on certain rows with the use of FOR UPDATE. This gives the database the power to operate on a lower global isolation level (READ COMMITTED) to encourage concurrency on rows with no contention, while the code avoids the problems of “Lost Updates” and “Write Skew” on the particular rows focused on. Using the code sample: await connPrimary.query(SET SESSION TRANSACTION ISOLATION LEVEL ${isolation}``); gives the user the ability to change the strategy dynamically, but the code sample makes it clear that the focus is on FOR UPDATE, which suggests row-level locking as the primary consistency guardrail
+Data Transparency
+	The middleware’s service-layer design allows for impressive location and fragmentation transparency. Applications can never know the details of the physical network topology or the locations of the actual data since every detail of the distributed system is abstracted out. Consider the case of getAllUsers. It runs parallel queries on two nodes, SLAVE 2006 and SLAVE 2007, and, after retrieving the intermediate results, merges them, before sending them to the user. The user sees one table, one of the results from the API, but the data comes from different databases from several subnetworks. The system is fragmentation transparent as well. The data is horizontally tagged (sharded) by dateOfBirth and each query is routed based on which dateOfBirth range it belongs to, and getAllUsersByDate, which routes the queries for 2006 to Node 1, 2007 to Node 3. The client is insulated from concerns over data location, and the data will remain unpartitioned for them. Most importantly, the middleware is where all the sharding logic compute resides. If the rules and node allocations for sharding are updated, the only thing that needs to change is the service layer, and nothing will be required from the client.
+Methodology
+To simulate and validate global concurrency control, a stress-testing methodology was employed using the Node.js asynchronous runtime. The methodology involved:
+Connection Pooling: Using mysql2/promise to maintain active pools for all three nodes, simulating a persistent distributed environment.
+Transaction Management: Utilizing explicit beginTransaction, commit, and rollback calls within try-catch blocks to simulate atomic units of work.
+Conflict Simulation: Deliberately firing concurrent API calls targeting the same User ID to trigger the locking mechanisms on the Master node.
+The technological environment used to simulate the test cases for the project involved:
+API & Environment: Node.js Express Server.
+Web Server: Next.js
+Database: Three MySQL instances (Node 1, 2, 3) running on distinct ports.
+Tools: Postman (for single requests) and automated scripts (using Promise.all) to simulate concurrent users.\
+Test Cases
+There were 3 categories of tests, one testing how the concurrent read requests are handled, the second testing how concurrent read and write requests are handled and the last testing how concurrent writes are handled. The system setup consists of 3 nodes, one of which is the central node that receives all the write requests.
+The first test case involves user A and user B both simulating reading the same information on a user concurrently.  The two users call readTask which sends a get request to the backend leading to the set user ID.
+The second test case involves user A sending a put request and user B sending a get request concurrently. User A calls the updateTask while user B still calls the read task sending put and get requests to the backend.
+The third test case involves user A and user B both sending write requests to the same user. Both users call the updateTask while sending 2 put requests at the same time to the backend.
+Each of these test cases are done through all 4 of the isolation levels, and the option to do each case 3 times is also an option present.
+Validation Strategy
+The strategy for the concurrency tests focuses on consistency across all tests and isolation levels when multiple people access the same database.
+For each test case, the response body (either full or just partial information)  should contain the valid HTTP 200 responses and 500 errors otherwise. The locking behavior of each isolation level is validated by the time taken for each of the tests taking longer the stronger the isolation is guaranteed.
+Test Results & Analysis
+Case 1: User A and User B Read
+Isolation Level
+Time
+Read Uncommitted
+User A: 13ms, User B: 14ms
+Read Committed
+User A: 12ms, User B: 14ms
+Read Repeatable
+User A: 13ms, User B:14ms
+Serializable
+User A: 17ms, User B: 23ms
+
+Although the difference between the first four is little, the concept of taking more time to load the higher the isolation is still present with the serializable times taking much longer to load.
+Case 2: User A Write and User B Read
+Isolation Level
+Time
+Read Uncommitted
+User A: 75ms, User B: 15ms
+Read Committed
+User A: 99ms, User B: 11ms
+Read Repeatable
+User A: 108ms, User B:20ms
+Serializable
+User A: 92ms, User B: 10ms
+
+Similar to case 1, the difference between read committed, read repeatable and serializable isn’t noticeable. The gap between read uncommitted and the other 3 however, shows the efficiency when there are fewer variables when it comes to writing.
+Case 3: User A and User B Write
+Isolation Level
+Time
+Read Uncommitted
+User A: 175ms, User B: 99ms
+Read Committed
+User A: 159ms, User B: 84ms
+Read Repeatable
+User A: 178ms, User B:102ms
+Serializable
+User A: 187ms, User B: 104ms
+
+The outlier based on the data is read committed, showing to be faster with both users sending write requests. While the gap isn’t large, the sequence of taking more time the higher the isolation level is starting to show there.
+Overall, the performance based on the isolation levels may not be too significant when just doing read requests, but becomes much more obvious the more interaction is required with the database. As such, it can also be determined that read committed is the most efficient choice for both speed and proper security.
+Global Failure and Recovery
+
+There is a need for recovery strategies when it comes to distributed database systems to prevent further damage from happening when crashes or attacks occur during transactional processes or when the database itself is idle. These strategies will also promote data consistency, fault tolerance, system reliability, atomicity of transactions, and durability which promotes data integrity and consistency and continuous system operability while preventing data loss and corruption.
+
+Implemented systems/strategies
+
+Inside a recovery operation, frequent checks within the three databases are done to determine if one of these has crashed. This is specifically important for checking if the master node has crashed as this node is the only one that can do WRITE functions such as UPDATE and DELETE. It also looks out for transactions that are happening concurrently when a crash suddenly takes place as it ensures that the transactions are properly done without any inconsistencies and irregularities when the transaction happens again. With this concept in mind, the group implemented a Master-Slave Recovery System when the Master node crashes, a Slave is promoted and an immediate database modification where if the connection crashes or gets interrupted, the transaction will commit the proper values needed.
+
+Algorithms
+
+Master Node Crash
+Crash Check
+Checks if Master node is down
+If down, it calls the changeMasterNode function
+
+Change Master Node
+After this is called it then selects the best slave node (for this situation, any slave node) to use as the new Master node
+It then calls promoteSlave
+
+Promote Slave
+Once this function is called, it then runs SQL scripts such as STOP SLAVE and SET PERSIST to promote the chosen node into master status
+
+Assign Slave
+Once the new master node is promoted, the untouched slave node is then reassigned to the host of the new master node
+The SQL script of  CHANGE MASTER TO redirects the current slave node to the new master node.
+
+Checks for UP
+The algorithm in connect.js then checks for the old master node when it is online again every 10 seconds.
+Once online, it then calls recoverOldMaster to convert the old master node into a slave node
+
+Recover Old Master
+The old master node’s roles are turned into slave nodes through a similar SQL script in Assign Slave.
+
+Immediate Database Modification
+Write
+It proceeds to do with its transaction and partially commits through writing.
+If Crashes
+Once it crashes, the catch block will roll back to when the connection previously crashed.
+Once rolled back, the transaction will continue as expected and then will commit to the database.
+If No Crashes
+If no crashes occur, the partially committed transaction will then commit to the database.
+Methodology
+	The methodology used with the recovery strategy will have some similarities with the implementation of Concurrency Control and Consistency. With this in mind, the group utilized Node.js’ runtime and Ubuntu's mysql installation to help work on these enactments.
+MySQL installation of Linux: The group used the scripts for the utilization of MASTER and SLAVE, and config files to help set up replication and for the crash preparation.
+Connection Pooling & Transaction Management: The same definition as the one in the concurrency segment, using mysql2/promise to maintain active pools for all three nodes, simulating a persistent distributed environment. As for Transaction Management, Utilizing explicit beginTransaction, commit, and rollback calls within try-catch blocks to simulate atomic units of work.
+MySQL library in Node.js: Similar to the installation of Linux, utilization of the SLAVE and MASTER script to assist with changing the roles of the nodes whenever a crash happens.
+Objects in js: Objects are used in the implementation of nodes to help with determining in which node is which, what their roles are, their online status and their host address.
+The technological environments are the same as the ones in the concurrency segment.
+Test Cases
+There are 4 tests in total put into 2 different categories: first one involves testing transactions while the central node is down and the other testing how transactions are done while the fragment nodes are down. Similar to the concurrency test cases, this is done with 3 nodes with a main central node receiving the write requests,
+The first test case involves a fragment node attempting to replicate the update to the central node albeit the central node being unavailable. Once the node is down, the backend calls the updateUserById, but triggers the catch block.
+The second test case involves the central node recovering from going down, and missing the information that was committed by the fragment nodes.
+The third test case involves a central node attempting to replicate the committed write to a fragment node albeit the fragment nodes being unavailable. Once the node is down, the backend calls the updateUserById, but triggers the catch block.
+The second test case involves the fragment nodes recovering from going down, and missing the information that was committed by the central node.
+Validation Strategy
+The validation strategy for these tests focus on verifying the systems compliance with the transactions based on the specifications. This is done through the following checks:
+A node crash before a commit results in a failed update and returns old and unchanged data.
+When a fragment node crashes during replication, the central node must still commit its update successfully.
+Upon recovery, the fragment should eventually match the central node’s version. recoverCentral() throws errors checking corruption and inconsistent reads and writes.
+Test Results & Analysis
+Case 1 & 2: Failure and Recovery
+Case
+Output
+Status
+Commit After Failure
+firstName: “committed”
+200
+After Recovery
+firstName: “committed”
+200
+
+The commit for the test cases sets the user’s first name to “committed”, and here we can see that it still properly commits after failure and after recovery.
+Case 3 & 4: Failure and Recovery
+Case
+Output
+Status
+Commit After Failure
+firstName: “committed”
+200
+After Recovery
+firstName: “committed”
+200
+
+The commit for the test cases sets the user’s first name to “committed”, and here we can see that it also still properly commits after failure and after recovery.
+Overall, although there are errors in terms of calling the centralRecovery() function, the recovery commit strategies and code do work to properly save work.
+
+Insights and Strategies
+The results of the project show how the distributed database handles the concurrent transactions, replication and recovery. The central node acts as the primary writer to the other fragment nodes. The update logic in users.services.js ensures that writes are executed on the master node using explicit transactions, row-level locks, and isolation-level enforcement. Reads are allowed on all nodes, and replication ensures that committed updates eventually reach the central node. These mechanisms allow clients to interact with the system as if it were a single unified database, even though the underlying data is fragmented across shards.
+
+Importance of Distributed Databases
+
+Distributed database systems are crucial for modern applications requiring high scalability and high availability. The distributed systems avoid the single point of failure and bottleneck of the centralised architecture by partitioning the data and processing across multiple nodes. The systems illustrate distributed systems core tenants, such as improved fault tolerance and the ability to manage traffic volumes that exceed single server systems, as they continue to operate regardless of the failure of one or some nodes. This is in line with the principles established by Stonebraker and others, who state that distribution is the solution to the problem of large scale transactional workload.
+
+	Table 5.1. Isolation Levels
+Isolation Level
+Concurrency Behavior
+Key Insight
+Read Uncommitted
+Fastest overall, especially in Case 2 (Write/Read)
+High speed, but risks Dirty Reads and other anomalies.
+Read Committed
+Highly efficient for concurrent writes (Case 3 outlier)
+Offers a strong balance between speed and security, preventing Dirty Reads.
+Repeatable Read
+Consistently slightly slower than Read Committed in read-heavy scenarios (Case 1)
+Prevents Non-Repeatable Reads by guaranteeing that data read once won't change within the transaction lifespan.
+Serializable
+Longest execution times overall
+Guarantees strict consistency (Serializability) but introduces the highest latency due to aggressive locking.
+
+The decision to pair READ COMMITTED with explicit Pessimistic Locking (SELECT ... FOR UPDATE) is critical. This approach maximizes throughput by allowing high concurrency for non-conflicting reads and writes, while explicitly enforcing serialization only on the specific data items being modified. This pragmatic strategy prevents critical anomalies like Lost Updates and Write Skew without imposing the severe performance penalty of global Serializable isolation, confirming practices reported in modern DBMS tuning guides (Gray, J., & Reuter, A., 1993).
+
+Data Fragmentation
+	The database was sharded by dateOfBirth year, and replicated via a Master-Slave setup which are necessary aspects to overall performance and reliability. Fragmentation enhances the performance by directing queries to smaller, more relevant datasets, thereby reducing I/O and query latency. Replication ensures high availability and fast read performance by duplicating data across multiple nodes. The Primary Copy with Asynchronous Replication update strategy dictates that consistency is immediately enforced at the Master node through centralized locking. The resulting consistency in Slave nodes is eventual consistency. While this improves write speed by not requiring synchronous commits across all nodes, it means the Slave nodes may briefly return stale data, a known trade-off inherent in Master-Slave configurations (Gilbert, S. &  Lynch, N., 2002).
+
+Data Replication Benefits During Node Failure
+Data replication provides immediate benefits to users even when a node fails. If one of the read-replica nodes (SLAVE 06 or SLAVE 07) were to fail, the application could potentially failover to the Master node (Node 2) for reads, or the query logic could be temporarily disabled for the failed fragment. Crucially, the Master Node maintains the full copy of the data, ensuring the application can continue processing all write transactions and most read transactions, providing continuous system operability and preventing the system from entirely crashing.
+
+Facilities for Recovery Strategies
+	As mentioned at the Global Recovery Segment, the facilities needed to develop the group’s strategy would be the rollback in the concurrency transactions, the recovery functions to ensure proper promotion within the nodes and the virtual machines as these will be the ones that will set up the connections between each machine and to initialize the MASTER and SLAVE relationship between the nodes.
+
+Conclusion
+	This paper highlights an in-depth overview of an implemented 3-node homogenous master-slave distributed database for the Users table, with a Node.js that routes READs to fragments and sends all WRITEs to MASTER. Implemented features span concurrent updates, CRUD, failure-recovery strategies, master promotion, isolation control, transaction management, immediate database modification semantics to prevent partial commits, as well as horizontal fragmentation on the birth year, with SLAVE 06 getting rows containing ‘2006’ and SLAVE 07 containing ‘2007’ entries.  
+This entailed implementing read-write permissions and isolation control amongst different facets of the project, primarily through how transactions are handled to both synchronize the entire database and enact commit-consistent CRUD operations on the master node. Aside from this, the master-slave model was utilized to illustrate and determine the failure-recovery process, through the use of appointing new masters, rerouting directed node updates to the new master node, and checking for the old master node to refactor the entire system back to its initial 3-node state post-recovery through synchronous replication, via REST API. 
+The testing has also shown that while the difference in performance between the isolation levels for concurrency is little, the gap between read committed over the other isolation levels is still present. The speed in performance is only beaten by read uncommitted, and its security is also still present, not accepting anything uncommitted. For global failure recovery, both types of test cases focus on different types of nodes failing and the other surviving nodes still committing writes to it. After the testing, although there are some issues with the recoveryCentral() function, the test cases still work and succeed.
+Overall, the implemented project highlights the versatility of distributed databases with respect to simulating and handling failure cases, most especially with regards to retaining data integrity amongst system crashes.
+
+References
+Gilbert, S., & Lynch, N. (2002). Brewer's conjecture and the feasibility of consistent, available, partition-tolerant web services. ACM SIGACT News, 33(2), 51-59.
+Gray, J., & Reuter, A. (1993). Transaction Processing: Concepts and Techniques. Morgan Kaufmann.
+Tang, K. (2025b). Recovery Techniques [PowerPoint slides]. De La Salle University.
+Tang, K. (2025b). Transactions [PowerPoint slides]. De La Salle University.
+Tang, K. (2025b). Schedules [PowerPoint slides]. De La Salle University.
+Tang, K. (2025b). Distributed Databases [PowerPoint slides]. De La Salle University.
+Tang, K. (2025b).Concurrency and Isolation Levels [PowerPoint slides]. De La Salle University.
+Tang, K. (2025b).Concurrency and Locking [PowerPoint slides]. De La Salle University.
+Juhi, A. (2025, Oct. 5) Transaction Recovery in Distributed System Geek for Geeks https://www.geeksforgeeks.org/operating-systems/transaction-recovery-in-distributed-system/
+Philip A. Bernstein, Eric Newcomer,
+Chapter 7 - System Recovery,
+Editor(s): Philip A. Bernstein, Eric Newcomer,
+In The Morgan Kaufmann Series in Data Management Systems,
+Principles of Transaction Processing (Second Edition),
+Morgan Kaufmann, 2009, Pages 185-222, ISBN 9781558606234, https://doi.org/10.1016/B978-1-55860-623-4.00007-X. (https://www.sciencedirect.com/science/article/pii/B978155860623400007X)
+
+Declarations
+
+9.1 Declaration of Generative AI Usage
+During the development of the project and the preparation of the report, the developers / authors used the following AI tools for the indicated tasks:
+
+AI Tool
+Tasks
+Gemini
+Look for syntaxes for the codebase and articles to support the paper
+Chat GPT
+Look for syntaxes for the codebase and articles to support the paper
+
+Consolidated all paper findings into bullet points to help in writing the conclusion
+
+
+
+
+
+
+
+
+
+
+
+9.2 Record of Contribution
+ 
+
+Member
+Contributions
+Wesner Almin III
+Created the Web App for the system and wrote parts of the Paper
+Ethan Iago Dela Cruz
+Created the test cases and tested the functions within the entirety of the application and wrote a part of the Paper
+Rohann Gabriel Dizon
+Initialized the back end of the application and created the concurrency, isolation levels and immediate database modification, tweaked the virtual machine and wrote a part of the paper.
+Patrick Hans Perez
+Created the data replication and the dynamic master-slave nodes in the back end, created the algorithm for when the master node crashes, tweaked the virtual machine and wrote a part of the paper.
+
+
+
+
+
+
+Step 1.      Read Exercise 5 Distributed Databases
+Exercise 5 points you to resources and guide questions in setting up your distributed database system and in designing your web application that includes provisions for data replication and recovery facilities towards supporting concurrent transaction processing while maintaining the database in a consistent state. Your answers in this exercise will comprise part of your MCO2 Technical Report.
+
+ 
+
+Step 2.      Build the Distributed Database System
+Create and deploy three (3) nodes – with three (3) separate computers that are connected and can communicate with each other. Each node should have its own database with the following contents:
+Node 1 (Central Node): All rows in the main database
+Node 2: Partition of rows based on a specified database fragmentation criterion
+
+Node 3: Partition of rows based on a specified database fragmentation criterion
+
+Notes:
+
+Only 1 table with limited columns from the original dataset is needed for this project.
+Referencing Exercise 5, design a homongenous DDB where the schema across all 3 nodes is the same, To implement data fragmentation, Nodes 2 and 3 do not contain overlapping rows. When combined, they yield the full set of rows found in Node 1.
+A web application should be loaded into each node to manage the accessibility of the database across multiple sites.
+Step 3.      Concurrency Control and Consistency
+Create and deploy a web application to simulate concurrency control and replication for the distributed database system. The application should be able to show two or more concurrently executing transactions in two or more nodes and they all leave the database in a consistent state. Simulate concurrency and replication for each of the following three (3) cases and report the results:
+
+Case #1: Concurrent transactions in two or more nodes are reading the same data item.
+Case #2: At least one transaction in the three nodes is writing (update / delete) and the other concurrent transactions are reading the same data item.
+Case #3: Concurrent transactions in two or more nodes are writing (update / delete) the same data item.
+Notes:
+Test each case on each of the following isolation levels: read uncommitted, read committed, read repeatable and serializable. For this particular application, which of the isolation level supports the highest volume of concurrent transactions while leaving the database in a consistent state? Justify your choice and document your findings in the technical report.
+You must code your own replication and update strategies. Updates in either Node 2 or Node 3 should be replicated in the central node. Any updates in the central node should be replicated in either Node 2 or Node 3. Refer to Exercise 5.
+How is data transparency supported by your data replication and update strategy?
+Step 4.      Global Failure Recovery
+Extend the web application to simulate global crash and recovery. Show how the distributed system recovers from failures when concurrent transactions are executing. Simulate the system operations (what the web application will do) and report the results of the following four (4) cases:
+Case #1: When attempting to replicate the transaction from Node 2 or Node 3 to the central node, the transaction fails in writing (insert / update) to the central node.
+
+Case #2: The central node eventually recovers from failure (i.e., comes back online) and missed certain write (insert / update) transactions.
+
+Case #3: When attempting to replicate the transaction from central node to either Node 2 or Node 3, the transaction fails in writing (insert / update) to Node 2 or Node 3.
+
+Case #4: Node 2 or Node 3 is eventually recovers from failure (i.e., comes back online) and missed certain write (insert / update) transactions.
+
+Notes:
+
+You are required to code your own recovery strategy.
+The web application must be deployed using the provided CCS Cloud or other 3rd party servers.
+How are users shielded from node failure? When a node fails, how does your data replication strategy support the continued availability of the web application?
+How does your data replication strategy support the recovery of your distributed database system from failure? 
+What happens during a recovery operation? 
+Step 5.      Evaluation
+Write a test script for each of the test cases described in Steps 3 and 4. Execute each of your test cases at least 3 times and log the results. 
+Notes:
+
+Remember that testing should be efficient and effective.
+The test script should be submitted as part of the Appendix of your Technical Report.
+Step 6.      Technical Report
+Prepare your documentation. Include all design decisions -- setting up the distributed database, simulating the global concurrency, replication strategy, recovery strategy, test methods and results.
+
+content-divider.png
+writing.png Technical Report
+Use the given template (Microsoft Word Download Microsoft Word, LaTex Download LaTex) and follow the outline below in preparing your Technical Report. The Technical Report should be at least 4 pages and at most 10 pages excluding References and Appendix.
+1.     Introduction
+Give a general overview of distributed databases and their usage.
+Then narrow down to your specific use case -- what is your paper all about, why build a distributed database, how does your web application manage the access to the distributed database across the 3 nodes?
+Cite related literature for your definition of terms.
+2.     Distributed Database Design
+Using Exercise 5 Distributed Databases as your guide,
+
+Present the setup of your distributed database, the data stored in each node, and the application use case (functionalities).
+Is the database homogeneous or heterogeneous? How is data replicated and fragmented across the nodes?
+Give an overview of the update and recovery mechanism of your distributed database as a prelude to Sections 3 and 4.
+Provide illustrations and diagrams as necessary to support and increase the clarity of your discussion.
+Cite related literature to support your design decisions.
+Creatively use supporting diagrams to increase the clarity of your discussion.     
+3.     Concurrency Control and Consistency
+How do you maintain global concurrency control through your web application and update strategy? 
+Update Strategy. Referencing Exercise 5 Distributed Databases,
+Describe your update strategy to maintain database consistency such that updates in either Node 2 or Node 3 are replicated in the central node, and any updates in the central node are replicated in either Node 2 or Node 3? Is it a master-slave or a multi-master setup, or some other setup? Justify
+Illustrate with the use of an algorithm (not source code). Which isolation level (read uncommitted, read committed, read repeatable and serializable) is most appropriate for your web application to support the highest volume of concurrent transactions while leaving the database in a consistent state? Justify your decision based on your experiments.
+How is data transparency supported by your data replication and update strategy?
+Method. Explain the methodology you employed to simulate global concurrency control.
+Describe the setup of your experiments
+Show the concurrent transactions used to simulate the experiment / test cases.
+How did you validate that the concurrency control, replication and update strategies such that these will leave the database in a consistent state?
+Show your test results and give your analysis.
+Use tables and diagrams accordingly to present your setup, test cases, test data, and test results.
+Discussion. Discuss key insights from your replication and update strategies and analysis of results must be supported by citing relevant literature, i.e., how do your results confirm those reported in prior works?
+
+4.     Global Failure and Recovery
+Recovery Strategy. 
+Why is there a need for recovery strategies?
+What happens during a recovery operation? What facilities did you build to support your distributed database during a recovery operation?
+Illustrate with the use of an algorithm (not source code).
+Method. Explain the methodology you employed to simulate global failure and recovery.
+Describe the setup of your experiments.
+Present the test cases used to simulate each of the test cases in global failure and recovery.
+How did you validate the correctness of your recovery strategy?
+Show your results and give your analysis.
+Use tables and diagrams accordingly to present your setup, test cases, test data, and test results.
+Discussion. Discuss key insights from your recovery strategies and analysis of results must be supported by citing relevant literature, i.e., how do your results confirm those reported in prior works?
+5.     Discussion
+Present your findings vis-a-vis the learnings and insights gained from the conduct of your experiments / simulations.
+Focus on two key aspects -- (i) concurrency and update strategy, and (ii) recovery strategy.
+What is the importance of distributed databases?
+How do proper isolation levels allow transactions to be executed concurrently?
+Why are data fragmentation and replication necessary? How do these affect data consistency and recovery?
+How do data replication benefit users even when a node fails?
+How is data transparency supported by your data replication and update strategy?
+What facilities need to be in place to support node recovery?
+Cite relevant references to further support your discussion.
+6.     Conclusion
+Gives (i) a short recap of your work (project) with the key strategies employed, and (ii) relevant findings.
+7.     References
+Reviewing literature on distributed databases, concurrency control and recovery strategies should be conducted to help you in doing your project and writing your paper.
+8.     
+
+Declarations. Academic honesty reflects your true character and personal values. In this part of the paper, please provide the following.
+
+9.1  Declaration of Generative AI Usage. “During the development of the project and the preparation of the report, the developers / authors used the following AI tools for the indicated tasks:
+
+If single AI tool, indicate the [AI tool] and the list of tasks, e.g., 
+
+Define (Explain) concepts such as star and snowflake, dimensional hierarchy, types of transformation
+Suggest a list of analytical reports
+Paraphrasing and grammar checking
+If multiple AI tools, prepare a 2-column table
+
+[AI Tool 1]   Tasks
+
+[AI Tool 2]   Tasks
+
+After using the indicated tools, the developers / authors reviewed and edited the AI output and take full responsibility in explaining, justifying, critiquing and using the output of AI.”
+
+9.2   Record of Contribution. Indicate the contributions in the software development and paper writing of each member of the team.
+
+ 
+
+Appendix (Supplementary Materials)
+
+Test script
+content-divider.png
+
+list.jpg Final Deliverables
+The following final deliverables are required to be submitted on 29 November 2025 (Saturday) through AnimoSpace. Please follow the indicated submission page and file naming convention where n is your group number. 
+For this Assignment page, submit:
+
+1.     Technical Report following the ACM template Download ACM template (STADVDB MCO2 Group n Report.pdf). This will be run through TurnItIn for plagiarism check.
+
+The following deliverables should be submitted in the MCO2 - Supplementary Materials page to bypass TurnItIn.
+
+1.     Source Code (STADVDB MCO2 Group n Code.xxx where xxx is the extension code of your app)
+2.     Test Script with results (follow CSSWENG / STSWENG / SOFENGG / INTROSE format) (STADVDB MCO2 Group n Test.pdf)
+3.     Presentation slides (STADVDB MCO2 Group n Slides.pdf)
+Submissions with incomplete requirements (technical report with TurnItIn check; source code, test script, and presentation slides) will receive corresponding deductions accordingly.
+
+ 
+
+Late submissions will receive 10 points deduction per day late. No submission will be accepted after 03 December 2025.
+Prepare for a 20-minute live presentation of your distributed database setup and the various strategies you employed.
+Follow a presentation script and do not exceed the indicated time limit
+Focus on the distributed DB setup, update and replication algorithms, recovery algorithms
+Show proof of implementation by presenting the results from the execution of each test case
+Show proof of algorithm implementation through software demo
+End your presentation with your insights and learnings from the project
+Project presentations will be from November 29 to December 05. The actual schedule will be provided by your respective teacher.
+The web application and database must be deployed via the CCS Cloud or any 3rd party cloud server.
+
+Be ready to show your distributed database setup, including your database schema, SQL query statements, and source code.
+
+Members who are absent will be given a grade of 0.
+
+Members may receive individualized grading depending on contribution of work and ability to answer questions during the presentation.
+ 
+
+Plagiarized works – works copied from others and AI generated content – will automatically be given a grade of 0.0 for the course.
+Rubric - MCO2 Transactions
+Rubric - MCO2 Transactions
+Criteria	Ratings	Pts
+Building a Distributed Database
+6 to >4 pts
+EXEMPLARY
+Setup 3 accessible nodes for the DDB on separate cloud machines; Each node contains the indicated instance of the DB, applying appropriate fragmentation and replication; A web app is loaded into each node to manage the accessibility of the DDB across multiple sites.
+4 to >2 pts
+SATISFACTORY
+Setup 3 accessible nodes for the DDB on a single machine; Each node contains the indicated instance of the DB; but flaw in the fragmentation and replication approach; Flawed design of the web app to manage the accessibility of the DDB.
+2 to >0 pts
+BEGINNING
+The entire DB runs on a single node and is not distributed; Brute force approach in the design of the web app to manage the DDB.
+/ 6 pts
+Global Concurrency Control - Algorithm / Strategy
+6 to >3 pts
+EXEMPLARY
+Sound global update and replication strategies to transparently support concurrency and maintain consistency across the entire cluster
+3 to >0 pts
+SATISFACTORY
+Flaws in update and replication strategies employed to transparently support concurrency and maintain consistency across the entire cluster
+0 pts
+BEGINNING
+No replication strategy employed; Students relied on 3rd party tool(s); Cannot explain how it works and the rationale for the choice
+/ 6 pts
+Global Concurrency Control - Simulation
+10 to >7 pts
+EXEMPLARY
+For each of the 3 cases, clear method is employed in designing and executing the experiment; and sound testing of isolation levels.
+7 to >4 pts
+SATISFACTORY
+Minor flaw in simulating 1-2 test cases; Partial testing of isolation levels
+4 to >2 pts
+DEVELOPING
+Major flaw in simulating 1-2 test cases; No experiment to support choice of isolation levels
+2 to >0 pts
+BEGINNING
+Concurrency simulation in the localhost only; DB only updates the local nodes and does not keep the entire cluster updated
+/ 10 pts
+Global Failure Recovery - Algorithm / Strategy
+6 to >3 pts
+EXEMPLARY
+Proper facilities in place to support the continued availability of the DDB; Sound error recovery strategy
+3 to >0 pts
+SATISFACTORY
+Does not properly recover from any form of failure; Web app cannot function properly when a node fails
+0 pts
+BEGINNING
+Students relied on 3rd party tool(s); Cannot explain how it works and the rationale for the choice
+/ 6 pts
+Global Failure Recovery - Simulation
+10 to >7 pts
+EXEMPLARY
+For each of the 4 cases, clear method is employed in designing and executing the experiment; and sound testing of error recovery
+7 to >4 pts
+SATISFACTORY
+No flaws in cases #1 and #3; Minor flaws during error recovery for cases #2 and #4
+4 to >2 pts
+DEVELOPING
+Minor flaws in all cases, OR Major flaw in 1-2 cases
+2 to >0 pts
+BEGINNING
+Recovery simulation in the localhost only; DB cannot transparently function during and recover from failure
+/ 10 pts
+Presentation - Setup and Method
+6 to >4 pts
+EXEMPLARY
+Concise presentation of setup and simulation method, and challenges (a) DB Schema, Web apps; (b) Update and Replication strategy; (c) Recovery strategy
+4 to >2 pts
+SATISFACTORY
+Explains system setup and strategies (update, replication, recovery), but some parts of the discussion lack details
+2 to >0 pts
+BEGINNING
+Vague discussion of the system setup, algorithm design, justification for the strategies, and limitations
+/ 6 pts
+Presentation - Organization
+6 to >4 pts
+EXEMPLARY
+Concise presentation of the results and insights gained directly from the outcome of the experiments
+4 to >2 pts
+SATISFACTORY
+Explains the simulation methods, results and insights but some parts of the discussion lack details and are not fully evident from the experiments
+2 to >0 pts
+BEGINNING
+Vague discussion of the simulation methods, results and insights that are not supported by the experiments
+/ 6 pts
+Technical Report - Method
+10 to >7 pts
+EXEMPLARY
+Clear, concise and thorough discussion of (1) the DDB setup, including fragmentation and replication decisions, with supporting related work; (2) the web application to manage the access to the distributed database; and (3) the experiment or how the global concurrency, replication, and recovery were simulated, showing evidence of critical and reflective thinking
+7 to >4 pts
+SATISFACTORY
+Description of the decisions made for the DDB setup, fragmentation and replication decisions; web application for data access; experiment are insufficient (missing important details) and not properly supported by relevant literature.
+4 to >0 pts
+BEGINNING
+Superficial, vague and/or incomplete discussion of the DDB setup, the web application, and the conduct of the experiments and decisions that were made, lacking evidence of critical thinking and supporting related work
+/ 10 pts
+Technical Report - Concurrency Control & Replication Strategy
+10 to >7 pts
+EXEMPLARY
+Appropriate isolation level to support the highest volume of concurrent transactions; as well as update and replication strategies were employed covering all concurrency cases and justified based on relevant theories and evaluation method
+7 to >4 pts
+SATISFACTORY
+Employed isolation level as well as update and replication strategies properly addresses at least one case of concurrent read+update; demonstration and discussion is sufficient but not thorough
+4 to >0 pts
+BEGINNING
+Vague description of update and replication; insufficient demonstration of how concurrency control is enforced and how the system maintains consistency.
+/ 10 pts
+Technical Report - Recovery Strategy
+10 to >7 pts
+EXEMPLARY
+Employed strategies properly recover from transaction failures and node failures, and are able to perform replication after node recovers; demonstration and discussion sufficiently describes the situation
+7 to >4 pts
+SATISFACTORY
+Presence of flaws in the employed recovery strategies; discussion of how the recovery strategies were implemented is not thorough
+4 to >0 pts
+BEGINNING
+Vague description of global failure recovery; insufficient demonstration of how global failure recovery is enforced and how the system recovers from failure
+/ 10 pts
+Technical Report - Analysis, Results and Discussion
+10 to >7 pts
+EXEMPLARY
+Careful thought and reflection is evident in presenting the analysis and the insights gained from the test results and conduct of the experiments
+7 to >4 pts
+SATISFACTORY
+Can be further enriched by sharing insights and lessons learned from the conduct of the experiments
+4 to >0 pts
+BEGINNING
+Incomplete and/or ambiguous discussion of insights and lessons gained from the results and the experiments
+/ 10 pts
+Technical Report - Language and Format
+10 to >7 pts
+EXEMPLARY
+Evidence of careful choice of words and use of correct grammar; Properly follows ACM publication format; Proper citations and references; Evident care in preparing the report, with appropriate diagrams and tables
+7 to >4 pts
+SATISFACTORY
+Has minor flaws in the choice of words and/or grammar; Minor flaw in the use of prescribed template; Missing some citations and/or references
+4 to >0 pts
+BEGINNING
+Numerous issues in choice of words and grammar; Non-compliance with prescribed template; Missing important references and citations
+0 pts
+NO MARKS
+Incomplete submission (missing source code, test script, and/or presentation slides)

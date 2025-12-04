@@ -24,7 +24,6 @@ type Props = {
 }
 
 export default function EditUserForm({ user, onCancel = () => {}, onSaved = () => {}, className, }: Props) {
-  const [username, setUsername] = useState("")
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
   const [dateOfBirth, setDateOfBirth] = useState("")
@@ -33,13 +32,22 @@ export default function EditUserForm({ user, onCancel = () => {}, onSaved = () =
 
   useEffect(() => {
     if (!user) return
-    setUsername(user.username ?? "")
+    
+    // Convert date from MM/DD/YYYY to YYYY-MM-DD for HTML date input
+    const convertToISODate = (usDate: string) => {
+      if (!usDate) return ""
+      const parts = usDate.split('/')
+      if (parts.length !== 3) return ""
+      const [month, day, year] = parts
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+    }
+    
     setFirstName(user.firstName ?? user.first_name ?? "")
     setLastName(user.lastName ?? user.last_name ?? "")
-    setDateOfBirth(user.dateOfBirth ?? user.date_of_birth ?? "")
+    setDateOfBirth(convertToISODate(user.dateOfBirth ?? user.date_of_birth ?? ""))
     // accept M/F or full words
     const g = (user.gender ?? user.sex ?? "")
-    setGender(g === "Male" || g === "M" ? "Male" : g === "Female" || g === "F" ? "Female" : g)
+    setGender(g === "M" ? "Male" : g === "F" ? "Female" : g === "Male" || g === "Female" ? g : "")
   }, [user])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -47,27 +55,56 @@ export default function EditUserForm({ user, onCancel = () => {}, onSaved = () =
     if (!user) return
     setSaving(true)
     try {
+      // Map gender to single letter format expected by backend
+      const genderValue = gender === "Male" ? "M" : gender === "Female" ? "F" : gender
+      
+      // Convert date from YYYY-MM-DD to MM/DD/YYYY format expected by backend
+      const convertDateFormat = (isoDate: string) => {
+        if (!isoDate) return null
+        const [year, month, day] = isoDate.split('-')
+        return `${month}/${day}/${year}`
+      }
+      
       const payload: Record<string, any> = {
-        id: user.id,
-        username,
         firstName,
         lastName,
-        dateOfBirth,
-        gender,
+        gender: genderValue,
+        address1: user.address1,
+        address2: user.address2,
+        city: user.city,
+        country: user.country,
+        zipCode: user.zipCode,
+        phoneNumber: user.phoneNumber,
+      }
+      
+      // Only include dateOfBirth if it was provided
+      if (dateOfBirth) {
+        payload.dateOfBirth = convertDateFormat(dateOfBirth)
       }
 
-      const res = await fetch(`/api/table-users/${user.id}`, {
+      const res = await fetch(`/api/users/${user.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
 
-      if (!res.ok) throw new Error("Update failed")
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Update failed")
+      }
+      
       const updated = await res.json()
-      onSaved(updated)
+      // Map response back with updated data
+      onSaved({
+        ...user,
+        firstName,
+        lastName,
+        dateOfBirth,
+        gender: genderValue,
+      })
     } catch (err) {
       console.error(err)
-      alert("Failed to update user")
+      alert(err instanceof Error ? err.message : "Failed to update user")
     } finally {
       setSaving(false)
     }
@@ -80,12 +117,8 @@ export default function EditUserForm({ user, onCancel = () => {}, onSaved = () =
         <FieldGroup>
           <div className="flex flex-col items-center gap-1 text-center">
             <h1 className="text-2xl font-bold">Editing User Details</h1>
-            <p className="text-muted-foreground text-sm text-balance">Currently editing details for user: {username}</p>
+            <p className="text-muted-foreground text-sm text-balance">Currently editing details for user ID: {user?.id}</p>
           </div>
-          <Field>
-            <FieldLabel htmlFor="username">Username</FieldLabel>
-            <Input id="username" type="text" placeholder="ex. omsimnida67" required value={username} onChange={(e) => setUsername(e.target.value)} />
-          </Field>
           <Field>
             <FieldLabel htmlFor="firstName">Full Name</FieldLabel>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -94,8 +127,8 @@ export default function EditUserForm({ user, onCancel = () => {}, onSaved = () =
             </div>
           </Field>
           <Field>
-            <FieldLabel htmlFor="dateOfBirth">Date of Birth</FieldLabel>
-            <Input id="dateOfBirth" type="date" placeholder="MM/DD/YYYY" required value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
+            <FieldLabel htmlFor="dateOfBirth">Date of Birth (optional if not changing)</FieldLabel>
+            <Input id="dateOfBirth" type="date" placeholder="MM/DD/YYYY" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
           </Field>
           <Field>
             <div className="flex items-center">
